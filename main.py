@@ -384,6 +384,22 @@ python main.py train-rl --algorithm ppo
     logger.info(f"  評価データ: {eval_file}")
 
 
+def launch_merge_lora(args):
+    """LoRAアダプターをベースモデルにマージ"""
+    logger = logging.getLogger(__name__)
+    logger.info("LoRAアダプターをベースモデルにマージします")
+    
+    command = [
+        sys.executable, "scripts/merge_lora_model.py",
+        "--base-model", args.base_model,
+        "--lora-adapter", args.lora_adapter,
+        "--output", args.output,
+        "--device", args.device
+    ]
+    
+    run_command_with_progress(command)
+
+
 def extract_training_data(args):
     """学習用データの抽出処理"""
     logger = logging.getLogger(__name__)
@@ -633,6 +649,13 @@ def main():
     training_parser.add_argument('--val-ratio', type=float, default=0.1, help='検証データの割合')
     training_parser.add_argument('--test-ratio', type=float, default=0.1, help='テストデータの割合')
     
+    # LoRAモデルマージサブコマンド
+    merge_parser = subparsers.add_parser('merge-lora', help='LoRAアダプターをベースモデルにマージ')
+    merge_parser.add_argument('--base-model', type=str, required=True, help='ベースモデルのパス')
+    merge_parser.add_argument('--lora-adapter', type=str, required=True, help='LoRAアダプターのパス')
+    merge_parser.add_argument('--output', type=str, required=True, help='出力パス')
+    merge_parser.add_argument('--device', type=str, default='auto', choices=['auto', 'cuda', 'mps', 'cpu'], help='使用デバイス')
+    
     args = parser.parse_args()
     
     if not args.command:
@@ -652,6 +675,8 @@ def main():
             create_sample_data(args.output_dir)
         elif args.command == 'extract-training-data':
             extract_training_data(args)
+        elif args.command == 'merge-lora':
+            launch_merge_lora(args)
         
         logger.info("処理が完了しました！")
         

@@ -1,0 +1,148 @@
+# LLM Complete Toolkit 統合設定ファイル
+
+# 共通設定
+common:
+  device: "cuda"  # cuda, cpu, mps
+  seed: 42
+  log_level: "INFO"
+  output_dir: "./outputs"
+  data_dir: "./data"
+
+# ドキュメント処理設定
+document_processing:
+  # PDF処理設定
+  pdf:
+    use_pdfplumber_first: true
+    fallback_to_pypdf2: true
+    extract_by_page: true
+    
+  # Markdown処理設定
+  markdown:
+    extract_frontmatter: true
+    split_by_sections: true
+    preserve_code_blocks: true
+    
+  # LM Studio変換設定
+  lm_studio:
+    chunk_size: 512
+    output_format: "jsonl"  # jsonl, text
+    overlap_size: 50
+    include_metadata: true
+
+# 転移学習設定
+transfer_learning:
+  # LoRA設定
+  lora:
+    model_name: "microsoft/DialoGPT-medium"
+    lora_r: 16
+    lora_alpha: 32
+    lora_dropout: 0.1
+    target_modules: ["q_proj", "v_proj", "k_proj", "o_proj"]
+    
+    # トレーニング設定
+    training:
+      num_train_epochs: 3
+      per_device_train_batch_size: 4
+      gradient_accumulation_steps: 4
+      warmup_steps: 100
+      learning_rate: 2e-4
+      max_length: 512
+      save_steps: 500
+      logging_steps: 10
+      
+    # データ設定
+    data:
+      instruction_template: "### Instruction:\n{instruction}\n\n### Response:\n{output}"
+
+  # QLoRA設定
+  qlora:
+    model_name: "microsoft/DialoGPT-medium"
+    lora_r: 64
+    lora_alpha: 16
+    lora_dropout: 0.1
+    target_modules: ["q_proj", "v_proj", "k_proj", "o_proj", "gate_proj", "up_proj", "down_proj"]
+    
+    # 量子化設定
+    quantization:
+      load_in_4bit: true
+      bnb_4bit_use_double_quant: true
+      bnb_4bit_quant_type: "nf4"
+      bnb_4bit_compute_dtype: "bfloat16"
+    
+    # トレーニング設定
+    training:
+      num_train_epochs: 3
+      per_device_train_batch_size: 1
+      gradient_accumulation_steps: 16
+      warmup_steps: 100
+      learning_rate: 2e-4
+      max_length: 512
+      save_steps: 500
+      logging_steps: 10
+
+# 強化学習設定
+reinforcement_learning:
+  # PPO設定
+  ppo:
+    state_dim: 128
+    action_dim: 10
+    hidden_dim: 256
+    learning_rate: 3e-4
+    gamma: 0.99
+    eps_clip: 0.2
+    k_epochs: 4
+    batch_size: 64
+    
+    # トレーニング設定
+    training:
+      max_episodes: 1000
+      max_steps_per_episode: 200
+      update_frequency: 2048
+      save_frequency: 100
+      
+  # DQN設定
+  dqn:
+    state_dim: 128
+    action_dim: 10
+    hidden_dim: 256
+    learning_rate: 1e-3
+    gamma: 0.99
+    epsilon_start: 1.0
+    epsilon_end: 0.01
+    epsilon_decay: 0.995
+    buffer_size: 10000
+    batch_size: 32
+    target_update: 100
+    use_dueling: true
+    
+    # トレーニング設定
+    training:
+      max_episodes: 1000
+      max_steps_per_episode: 200
+      save_frequency: 100
+
+# ロギング設定
+logging:
+  use_tensorboard: true
+  use_wandb: false
+  wandb_project: "llm-complete-toolkit"
+  log_dir: "./logs"
+  
+# 評価設定
+evaluation:
+  eval_frequency: 500
+  eval_steps: 100
+  generate_samples: true
+  num_samples: 5
+  
+# チェックポイント設定
+checkpoint:
+  save_frequency: 500
+  max_checkpoints: 5
+  save_best_only: false
+  
+# 早期停止設定
+early_stopping:
+  patience: 5
+  min_delta: 0.001
+  restore_best_weights: true

@@ -447,7 +447,10 @@ def extract_training_data(args):
         output_format=args.output_format
     )
     
-    converted_data = converter.convert(all_documents)
+    if args.instruction_format:
+        converted_data = converter.convert_for_instruction_tuning(all_documents)
+    else:
+        converted_data = converter.convert(all_documents)
     
     # データ分割
     if args.split_data:

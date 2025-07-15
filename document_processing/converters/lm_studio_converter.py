@@ -18,7 +18,7 @@ class LMStudioConverter:
         self.output_format = output_format
         self.logger = logging.getLogger(__name__)
     
-    def convert(self, documents: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
+    def convert(self, documents: List[Any]) -> List[Dict[str, Any]]:
         """
         ドキュメントをLM Studio用の形式に変換
         
@@ -31,32 +31,46 @@ class LMStudioConverter:
         converted_data = []
         
         for doc in documents:
-            if not doc.get('content'):
+            # Documentオブジェクトまたは辞書の両方に対応
+            if hasattr(doc, 'content'):
+                content = doc.content
+                source = doc.source
+                title = getattr(doc, 'title', source)
+                doc_type = getattr(doc, 'doc_type', 'unknown')
+                metadata = getattr(doc, 'metadata', {})
+            else:
+                content = doc.get('content', '')
+                source = doc.get('source', '')
+                title = doc.get('title', source)
+                doc_type = doc.get('type', 'unknown')
+                metadata = doc.get('metadata', {})
+            
+            if not content:
                 continue
                 
             # テキストをチャンクに分割
-            chunks = self._split_text(doc['content'], self.chunk_size)
+            chunks = self._split_text(content, self.chunk_size)
             
             for i, chunk in enumerate(chunks):
                 if self.output_format == 'jsonl':
                     # JSONL形式（LM Studio推奨）
                     converted_item = {
                         'text': chunk,
-                        'source': doc['source'],
-                        'title': doc['title'],
-                        'type': doc['type'],
+                        'source': source,
+                        'title': title,
+                        'type': doc_type,
                         'chunk_id': i + 1,
                         'total_chunks': len(chunks),
-                        'metadata': doc.get('metadata', {})
+                        'metadata': metadata
                     }
                 else:
                     # プレーンテキスト形式
                     converted_item = {
                         'content': chunk,
                         'metadata': {
-                            'source': doc['source'],
-                            'title': doc['title'],
-                            'type': doc['type'],
+                            'source': source,
+                            'title': title,
+                            'type': doc_type,
                             'chunk_id': i + 1,
                             'total_chunks': len(chunks)
                         }
@@ -67,14 +81,35 @@ class LMStudioConverter:
         self.logger.info(f"変換完了: {len(converted_data)}チャンクを生成")
         return converted_data
     
-    def convert_for_instruction_tuning(self, documents: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
+    def convert_for_instruction_tuning(self, documents: List[Any]) -> List[Dict[str, Any]]:
         """
         インストラクションチューニング用の形式に変換
         """
         converted_data = []
         
         for doc in documents:
-            content = doc.get('content', '')
+            # Documentオブジェクトまたは辞書の両方に対応
+            if hasattr(doc, 'content'):
+                content = doc.content
+                source = doc.source
+                title = getattr(doc, 'title', source)
+                doc_type = getattr(doc, 'doc_type', 'unknown')
+                metadata = getattr(doc, 'metadata', {})
+                doc_info = {
+                    'title': title,
+                    'source': source,
+                    'type': doc_type,
+                    'metadata': metadata
+                }
+            else:
+                content = doc.get('content', '')
+                doc_info = {
+                    'title': doc.get('title', doc.get('source', '')),
+                    'source': doc.get('source', ''),
+                    'type': doc.get('type', 'unknown'),
+                    'metadata': doc.get('metadata', {})
+                }
+            
             if not content:
                 continue
             
@@ -83,7 +118,7 @@ class LMStudioConverter:
             
             for chunk in chunks:
                 # ドキュメントの内容に基づく質問応答を生成
-                qa_pairs = self._generate_qa_pairs(chunk, doc)
+                qa_pairs = self._generate_qa_pairs(chunk, doc_info)
                 converted_data.extend(qa_pairs)
         
         return converted_data

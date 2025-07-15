@@ -50,6 +50,13 @@ transfer_learning:
       save_steps: 500
       logging_steps: 10
       
+      # 最適化設定
+      use_adaptive_batching: true
+      use_performance_profiler: true
+      dataloader_num_workers: 4
+      group_by_length: true
+      bf16_enabled: true  # Apple Silicon最適化
+      
     # データ設定
     data:
       instruction_template: "### Instruction:\n{instruction}\n\n### Response:\n{output}"

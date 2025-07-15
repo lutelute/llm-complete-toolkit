@@ -20,6 +20,8 @@ from peft import (
 from typing import Dict, List, Optional, Union
 import logging
 import os
+from ..utils.batch_optimizer import BatchOptimizer, BatchOptimizationConfig, AdaptiveTrainingCallback
+from ..utils.performance_profiler import PerformanceProfiler, TrainingProfilerCallback
 
 
 class LoRAFineTuner:
@@ -81,7 +83,7 @@ class LoRAFineTuner:
     
     def prepare_dataset(self, texts: List[str], max_length: int = 512):
         """
-        データセットの準備
+        データセットの準備（最適化対応）
         
         Args:
             texts: テキストのリスト
@@ -91,11 +93,11 @@ class LoRAFineTuner:
             トークナイズされたデータセット
         """
         def tokenize_function(examples):
-            # テキストをトークナイズ
+            # テキストをトークナイズ（動的パディング用）
             tokenized = self.tokenizer(
                 examples["text"],
                 truncation=True,
-                padding="max_length",
+                padding=False,  # 動的パディングのため無効
                 max_length=max_length,
                 return_tensors="pt"
             )
@@ -103,12 +105,20 @@ class LoRAFineTuner:
             # 教師ありファインチューニング用にlabelsを設定
             tokenized["labels"] = tokenized["input_ids"].clone()
             
+            # 長さ情報を追加（group_by_length用）
+            tokenized["length"] = [len(ids) for ids in tokenized["input_ids"]]
+            
             return tokenized
         
         # データセットの作成
         from datasets import Dataset
         dataset = Dataset.from_dict({"text": texts})
-        tokenized_dataset = dataset.map(tokenize_function, batched=True)
+        tokenized_dataset = dataset.map(
+            tokenize_function, 
+            batched=True,
+            num_proc=4,  # 並列処理
+            remove_columns=["text"]  # 不要な列を削除
+        )
         
         return tokenized_dataset
     
@@ -124,6 +134,8 @@ class LoRAFineTuner:
         logging_steps: int = 10,
         save_steps: int = 500,
         eval_dataset=None,
+        use_adaptive_batching: bool = True,
+        use_performance_profiler: bool = True,
         **kwargs
     ):
         """
@@ -146,7 +158,37 @@ class LoRAFineTuner:
         # max_lengthなどの不要なパラメータを除去
         filtered_kwargs = {k: v for k, v in kwargs.items() if k not in ['max_length']}
         
-        # トレーニング引数の設定
+        # 動的バッチサイズ最適化の設定
+        batch_optimizer = None
+        adaptive_callback = None
+        
+        if use_adaptive_batching:
+            batch_config = BatchOptimizationConfig(
+                initial_batch_size=per_device_train_batch_size,
+                gradient_accumulation_steps=gradient_accumulation_steps,
+                max_batch_size=min(16, per_device_train_batch_size * 4),
+                min_batch_size=max(1, per_device_train_batch_size // 4)
+            )
+            batch_optimizer = BatchOptimizer(batch_config)
+            adaptive_callback = AdaptiveTrainingCallback(batch_optimizer)
+            
+            # 初期メモリ状況を確認
+            batch_optimizer.log_memory_stats()
+            
+            # 最適化されたバッチサイズを取得
+            per_device_train_batch_size, gradient_accumulation_steps = batch_optimizer.optimize_batch_size()
+        
+        # パフォーマンスプロファイラーの設定
+        profiler = None
+        profiler_callback = None
+        
+        if use_performance_profiler:
+            profiler = PerformanceProfiler(
+                output_dir=os.path.join(output_dir, "profiler_output")
+            )
+            profiler_callback = TrainingProfilerCallback(profiler)
+        
+        # トレーニング引数の設定（最適化対応）
         training_args = TrainingArguments(
             output_dir=output_dir,
             num_train_epochs=num_train_epochs,
@@ -155,6 +197,7 @@ class LoRAFineTuner:
             warmup_steps=warmup_steps,
             learning_rate=learning_rate,
             fp16=torch.cuda.is_available() and not torch.backends.mps.is_available(),
+            bf16=torch.backends.mps.is_available(),  # Apple Silicon最適化
             logging_steps=logging_steps,
             save_steps=save_steps,
             eval_strategy="steps" if eval_dataset else "no",
@@ -164,15 +207,28 @@ class LoRAFineTuner:
             metric_for_best_model="eval_loss" if eval_dataset else None,
             greater_is_better=False,
             report_to="tensorboard",
+            dataloader_num_workers=4,  # 並列データローダー
+            dataloader_pin_memory=True,  # メモリ効率化
+            group_by_length=True,  # 長さでグループ化
+            length_column_name="length",  # 長さ列名
+            remove_unused_columns=False,  # 未使用列を保持
             **filtered_kwargs
         )
         
-        # データコレーターの設定
+        # データコレーターの設定（動的パディング対応）
         from transformers import DataCollatorForLanguageModeling
         data_collator = DataCollatorForLanguageModeling(
             tokenizer=self.tokenizer,
-            mlm=False
+            mlm=False,
+            pad_to_multiple_of=8  # 効率的なパディング
         )
+        
+        # コールバックの設定
+        callbacks = []
+        if adaptive_callback:
+            callbacks.append(adaptive_callback)
+        if profiler_callback:
+            callbacks.append(profiler_callback)
         
         # トレーナーの作成
         trainer = Trainer(
@@ -181,7 +237,8 @@ class LoRAFineTuner:
             train_dataset=train_dataset,
             eval_dataset=eval_dataset,
             data_collator=data_collator,
-            tokenizer=self.tokenizer
+            tokenizer=self.tokenizer,
+            callbacks=callbacks
         )
         
         # トレーニング実行

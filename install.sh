@@ -113,6 +113,7 @@ pdfplumber==0.10.0
 markdown==3.5.1
 python-docx==1.1.0
 jsonlines==4.0.0
+chardet>=5.0.0
 
 # Transfer Learning (LoRA only - QLoRA not supported on Apple Silicon)
 peft>=0.6.0

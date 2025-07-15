@@ -22,6 +22,8 @@ import logging
 import os
 from ..utils.batch_optimizer import BatchOptimizer, BatchOptimizationConfig, AdaptiveTrainingCallback
 from ..utils.performance_profiler import PerformanceProfiler, TrainingProfilerCallback
+from ..utils.fast_tokenizer import FastTokenizer, OptimizedDataProcessor
+from ..utils.memory_optimizer import MemoryOptimizer, MemoryConfig, OptimizedDataCollator, MemoryOptimizedTrainingCallback
 
 
 class LoRAFineTuner:
@@ -81,46 +83,69 @@ class LoRAFineTuner:
         self.model = get_peft_model(self.base_model, self.lora_config)
         self.model.print_trainable_parameters()
     
-    def prepare_dataset(self, texts: List[str], max_length: int = 512):
+    def prepare_dataset(self, texts: List[str], max_length: int = 512, use_fast_tokenizer: bool = True):
         """
-        データセットの準備（最適化対応）
+        データセットの準備（高速化対応）
         
         Args:
             texts: テキストのリスト
             max_length: 最大長
+            use_fast_tokenizer: 高速トークナイザーを使用するか
             
         Returns:
             トークナイズされたデータセット
         """
-        def tokenize_function(examples):
-            # テキストをトークナイズ（動的パディング用）
-            tokenized = self.tokenizer(
-                examples["text"],
-                truncation=True,
-                padding=False,  # 動的パディングのため無効
-                max_length=max_length,
-                return_tensors="pt"
+        if use_fast_tokenizer:
+            # 高速トークナイザーを使用
+            self.logger.info("高速トークナイザーを使用してデータセットを準備中...")
+            
+            processor = OptimizedDataProcessor(
+                tokenizer=self.tokenizer,
+                cache_dir=os.path.join(os.getcwd(), "cache", "tokenizer")
             )
             
-            # 教師ありファインチューニング用にlabelsを設定
-            tokenized["labels"] = tokenized["input_ids"].clone()
+            # テキストの前処理
+            processed_texts = processor.preprocess_texts(texts)
             
-            # 長さ情報を追加（group_by_length用）
-            tokenized["length"] = [len(ids) for ids in tokenized["input_ids"]]
+            # 高速トークナイゼーション
+            tokenized_dataset = processor.prepare_dataset_optimized(
+                texts=processed_texts,
+                max_length=max_length,
+                use_cache=True,
+                chunk_size=2000,
+                max_workers=1  # 安定性優先
+            )
             
-            return tokenized
+            return tokenized_dataset
         
-        # データセットの作成
-        from datasets import Dataset
-        dataset = Dataset.from_dict({"text": texts})
-        tokenized_dataset = dataset.map(
-            tokenize_function, 
-            batched=True,
-            num_proc=4,  # 並列処理
-            remove_columns=["text"]  # 不要な列を削除
-        )
-        
-        return tokenized_dataset
+        else:
+            # 従来の方法（フォールバック）
+            self.logger.info("従来の方法でデータセットを準備中...")
+            
+            def tokenize_function(examples):
+                tokenized = self.tokenizer(
+                    examples["text"],
+                    truncation=True,
+                    padding=False,
+                    max_length=max_length,
+                    return_tensors=None
+                )
+                
+                tokenized["labels"] = tokenized["input_ids"].copy()
+                tokenized["length"] = [len(ids) for ids in tokenized["input_ids"]]
+                
+                return tokenized
+            
+            from datasets import Dataset
+            dataset = Dataset.from_dict({"text": texts})
+            tokenized_dataset = dataset.map(
+                tokenize_function, 
+                batched=True,
+                num_proc=1,
+                remove_columns=["text"]
+            )
+            
+            return tokenized_dataset
     
     def train(
         self,
@@ -136,6 +161,7 @@ class LoRAFineTuner:
         eval_dataset=None,
         use_adaptive_batching: bool = True,
         use_performance_profiler: bool = True,
+        use_memory_optimization: bool = True,
         **kwargs
     ):
         """
@@ -155,8 +181,12 @@ class LoRAFineTuner:
             **kwargs: その他の引数
         """
         
-        # max_lengthなどの不要なパラメータを除去
-        filtered_kwargs = {k: v for k, v in kwargs.items() if k not in ['max_length']}
+        # 不要なパラメータを除去
+        filtered_kwargs = {k: v for k, v in kwargs.items() if k not in [
+            'max_length', 'dataloader_num_workers', 'group_by_length', 
+            'use_adaptive_batching', 'use_performance_profiler', 'bf16_enabled',
+            'use_memory_optimization'
+        ]}
         
         # 動的バッチサイズ最適化の設定
         batch_optimizer = None
@@ -188,6 +218,24 @@ class LoRAFineTuner:
             )
             profiler_callback = TrainingProfilerCallback(profiler)
         
+        # メモリ最適化の設定
+        memory_optimizer = None
+        memory_callback = None
+        
+        if use_memory_optimization:
+            memory_config = MemoryConfig(
+                enable_gradient_checkpointing=True,
+                use_memory_efficient_attention=True,
+                optimize_memory_usage=True,
+                gc_frequency=100,
+                memory_cleanup_threshold=0.85
+            )
+            memory_optimizer = MemoryOptimizer(memory_config)
+            memory_callback = MemoryOptimizedTrainingCallback(memory_optimizer)
+            
+            # モデルのメモリ最適化
+            self.model = memory_optimizer.optimize_model(self.model)
+        
         # トレーニング引数の設定（最適化対応）
         training_args = TrainingArguments(
             output_dir=output_dir,
@@ -197,7 +245,7 @@ class LoRAFineTuner:
             warmup_steps=warmup_steps,
             learning_rate=learning_rate,
             fp16=torch.cuda.is_available() and not torch.backends.mps.is_available(),
-            bf16=torch.backends.mps.is_available(),  # Apple Silicon最適化
+            bf16=False,  # Apple Silicon環境では現在サポートされていない
             logging_steps=logging_steps,
             save_steps=save_steps,
             eval_strategy="steps" if eval_dataset else "no",
@@ -215,13 +263,21 @@ class LoRAFineTuner:
             **filtered_kwargs
         )
         
-        # データコレーターの設定（動的パディング対応）
-        from transformers import DataCollatorForLanguageModeling
-        data_collator = DataCollatorForLanguageModeling(
-            tokenizer=self.tokenizer,
-            mlm=False,
-            pad_to_multiple_of=8  # 効率的なパディング
-        )
+        # データコレーターの設定（最適化対応）
+        if use_memory_optimization and memory_optimizer:
+            data_collator = OptimizedDataCollator(
+                tokenizer=self.tokenizer,
+                mlm=False,
+                pad_to_multiple_of=8,
+                memory_optimizer=memory_optimizer
+            )
+        else:
+            from transformers import DataCollatorForLanguageModeling
+            data_collator = DataCollatorForLanguageModeling(
+                tokenizer=self.tokenizer,
+                mlm=False,
+                pad_to_multiple_of=8
+            )
         
         # コールバックの設定
         callbacks = []
@@ -229,6 +285,8 @@ class LoRAFineTuner:
             callbacks.append(adaptive_callback)
         if profiler_callback:
             callbacks.append(profiler_callback)
+        if memory_callback:
+            callbacks.append(memory_callback)
         
         # トレーナーの作成
         trainer = Trainer(

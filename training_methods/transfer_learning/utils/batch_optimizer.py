@@ -186,7 +186,15 @@ class AdaptiveTrainingCallback:
         self.step_count = 0
         self.logger = logging.getLogger(__name__)
     
-    def on_step_begin(self, trainer, step: int):
+    def on_init_end(self, args, state, control, **kwargs):
+        """初期化終了時の処理"""
+        return control
+    
+    def on_train_begin(self, args, state, control, **kwargs):
+        """学習開始時の処理"""
+        return control
+    
+    def on_step_begin(self, args, state, control, **kwargs):
         """ステップ開始時の処理"""
         self.step_count += 1
         
@@ -195,16 +203,24 @@ class AdaptiveTrainingCallback:
             new_batch_size, new_gradient_accumulation = self.batch_optimizer.optimize_batch_size()
             
             # TrainingArgumentsを更新
-            if (new_batch_size != trainer.args.per_device_train_batch_size or 
-                new_gradient_accumulation != trainer.args.gradient_accumulation_steps):
+            if (new_batch_size != args.per_device_train_batch_size or 
+                new_gradient_accumulation != args.gradient_accumulation_steps):
                 
-                trainer.args.per_device_train_batch_size = new_batch_size
-                trainer.args.gradient_accumulation_steps = new_gradient_accumulation
+                args.per_device_train_batch_size = new_batch_size
+                args.gradient_accumulation_steps = new_gradient_accumulation
                 
-                self.logger.info(f"Step {step}: バッチサイズ更新 -> {new_batch_size}, GA: {new_gradient_accumulation}")
+                self.logger.info(f"Step {state.global_step}: バッチサイズ更新 -> {new_batch_size}, GA: {new_gradient_accumulation}")
+        
+        return control
     
-    def on_step_end(self, trainer, step: int):
+    def on_step_end(self, args, state, control, **kwargs):
         """ステップ終了時の処理"""
         if self.step_count % (self.adjustment_frequency * 5) == 0:
             # 定期的にメモリ統計を出力
             self.batch_optimizer.log_memory_stats()
+        
+        return control
+    
+    def on_train_end(self, args, state, control, **kwargs):
+        """学習終了時の処理"""
+        return control

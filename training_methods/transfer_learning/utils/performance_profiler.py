@@ -351,19 +351,25 @@ class TrainingProfilerCallback:
         self.current_step = 0
         self.step_context = None
     
-    def on_train_begin(self, trainer):
+    def on_init_end(self, args, state, control, **kwargs):
+        """初期化終了時の処理"""
+        return control
+    
+    def on_train_begin(self, args, state, control, **kwargs):
         """学習開始時の処理"""
         self.profiler.start_monitoring()
         self.profiler.logger.info("学習プロファイリング開始")
+        return control
     
-    def on_step_begin(self, trainer, step: int):
+    def on_step_begin(self, args, state, control, **kwargs):
         """ステップ開始時の処理"""
-        self.current_step = step
-        batch_size = trainer.args.per_device_train_batch_size
-        self.step_context = self.profiler.profile_step(step, batch_size)
+        self.current_step = state.global_step
+        batch_size = args.per_device_train_batch_size
+        self.step_context = self.profiler.profile_step(state.global_step, batch_size)
         self.step_context.__enter__()
+        return control
     
-    def on_step_end(self, trainer, step: int):
+    def on_step_end(self, args, state, control, **kwargs):
         """ステップ終了時の処理"""
         if self.step_context:
             self.step_context.__exit__(None, None, None)
@@ -371,15 +377,18 @@ class TrainingProfilerCallback:
         
         # バッチ情報を記録
         self.profiler.record_batch_info(
-            trainer.args.per_device_train_batch_size,
-            trainer.args.gradient_accumulation_steps
+            args.per_device_train_batch_size,
+            args.gradient_accumulation_steps
         )
         
         # 定期的に統計を出力
-        if step % 100 == 0:
+        if state.global_step % 100 == 0:
             self.profiler.print_summary()
+        
+        return control
     
-    def on_train_end(self, trainer):
+    def on_train_end(self, args, state, control, **kwargs):
         """学習終了時の処理"""
         self.profiler.cleanup()
         self.profiler.logger.info("学習プロファイリング終了")
+        return control

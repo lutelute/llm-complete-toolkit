@@ -6,19 +6,22 @@
 
 ```
 training_data/
-├── raw/                    # 生データ格納
-│   ├── pdf/               # PDFファイル
-│   ├── markdown/          # Markdownファイル
-│   ├── text/              # テキストファイル
-│   └── json/              # JSONファイル
+├── raw/                    # 生データ格納（全形式混在OK）
+│   ├── document1.pdf      # PDFファイル
+│   ├── notes.md           # Markdownファイル
+│   ├── data.json          # JSONファイル
+│   ├── text_file.txt      # テキストファイル
+│   └── mixed_files...     # 複数形式のファイルが混在
 ├── processed/             # 処理済みデータ
-│   ├── extracted/         # 抽出されたテキスト
-│   ├── chunks/            # チャンク分割されたデータ
-│   └── formatted/         # フォーマット済みデータ
-└── datasets/              # 学習用データセット
+│   ├── training_data.jsonl        # 変換されたデータ
+│   └── instruction_data.jsonl     # インストラクション形式
+└── datasets/              # 学習用データセット（分割済み）
     ├── training/          # 訓練用データ
+    │   └── train.jsonl
     ├── validation/        # 検証用データ
+    │   └── eval.jsonl
     └── test/              # テスト用データ
+        └── test.jsonl
 ```
 
 ## 📄 対応ファイル形式
@@ -38,23 +41,26 @@ training_data/
 
 ### 1. データの配置
 ```bash
-# PDFファイルの配置
-cp /path/to/your/pdfs/*.pdf training_data/raw/pdf/
+# 全てのファイルを一つのフォルダに配置（形式混在OK）
+cp /path/to/your/mixed/files/* training_data/raw/
 
-# Markdownファイルの配置
-cp /path/to/your/markdown/*.md training_data/raw/markdown/
+# または個別にコピー
+cp /path/to/your/documents/*.pdf training_data/raw/
+cp /path/to/your/notes/*.md training_data/raw/
+cp /path/to/your/data/*.json training_data/raw/
+cp /path/to/your/texts/*.txt training_data/raw/
 
-# テキストファイルの配置
-cp /path/to/your/texts/*.txt training_data/raw/text/
-
-# JSONファイルの配置
-cp /path/to/your/json/*.json training_data/raw/json/
+# フォルダごとコピーも可能
+cp -r /path/to/your/document_folder/* training_data/raw/
 ```
 
 ### 2. データの処理
 ```bash
-# 全形式のデータを処理
+# 全形式のデータを自動処理（推奨）
 python main.py extract-training-data
+
+# データ分割付き処理
+python main.py extract-training-data --split-data --instruction-format
 
 # 特定の形式のみ処理
 python main.py extract-training-data --format pdf

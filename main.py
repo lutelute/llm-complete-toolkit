@@ -375,64 +375,66 @@ def extract_training_data(args):
     else:
         formats_to_process = [args.format]
     
-    # 各形式のファイルを処理
-    for format_type in formats_to_process:
-        format_dir = input_dir / format_type
-        if not format_dir.exists():
-            logger.warning(f"フォーマットディレクトリが存在しません: {format_dir}")
-            continue
-            
-        if format_type == 'pdf':
-            pdf_files = get_files_by_extension(format_dir, '.pdf')
-            if pdf_files:
-                logger.info(f"PDFファイル {len(pdf_files)}件を処理中...")
-                pdf_parser = PDFParser()
-                for pdf_file in pdf_files:
-                    try:
-                        documents = pdf_parser.parse(pdf_file)
-                        all_documents.extend(documents)
-                        logger.info(f"  処理完了: {pdf_file}")
-                    except Exception as e:
-                        logger.error(f"  PDFファイル処理エラー {pdf_file}: {e}")
-        
-        elif format_type == 'markdown':
-            md_files = get_files_by_extension(format_dir, '.md')
-            if md_files:
-                logger.info(f"Markdownファイル {len(md_files)}件を処理中...")
-                md_parser = MarkdownParser()
-                for md_file in md_files:
-                    try:
-                        documents = md_parser.parse(md_file)
-                        all_documents.extend(documents)
-                        logger.info(f"  処理完了: {md_file}")
-                    except Exception as e:
-                        logger.error(f"  Markdownファイル処理エラー {md_file}: {e}")
-        
-        elif format_type == 'json':
-            json_files = get_files_by_extension(format_dir, '.json') + get_files_by_extension(format_dir, '.jsonl')
-            if json_files:
-                logger.info(f"JSONファイル {len(json_files)}件を処理中...")
-                json_parser = JsonParser()
-                for json_file in json_files:
-                    try:
-                        documents = json_parser.parse(json_file)
-                        all_documents.extend(documents)
-                        logger.info(f"  処理完了: {json_file}")
-                    except Exception as e:
-                        logger.error(f"  JSONファイル処理エラー {json_file}: {e}")
-        
-        elif format_type == 'text':
-            text_files = get_files_by_extension(format_dir, '.txt')
-            if text_files:
-                logger.info(f"テキストファイル {len(text_files)}件を処理中...")
-                text_parser = TextParser()
-                for text_file in text_files:
-                    try:
-                        documents = text_parser.parse(text_file)
-                        all_documents.extend(documents)
-                        logger.info(f"  処理完了: {text_file}")
-                    except Exception as e:
-                        logger.error(f"  テキストファイル処理エラー {text_file}: {e}")
+    # 各形式のファイルを処理（input_dirから直接）
+    processed_files = 0
+    
+    if 'pdf' in formats_to_process or 'all' in formats_to_process:
+        pdf_files = get_files_by_extension(input_dir, '.pdf')
+        if pdf_files:
+            logger.info(f"PDFファイル {len(pdf_files)}件を処理中...")
+            pdf_parser = PDFParser()
+            for pdf_file in pdf_files:
+                try:
+                    documents = pdf_parser.parse(pdf_file)
+                    all_documents.extend(documents)
+                    processed_files += 1
+                    logger.info(f"  処理完了: {pdf_file.name}")
+                except Exception as e:
+                    logger.error(f"  PDFファイル処理エラー {pdf_file.name}: {e}")
+    
+    if 'markdown' in formats_to_process or 'all' in formats_to_process:
+        md_files = get_files_by_extension(input_dir, '.md') + get_files_by_extension(input_dir, '.markdown')
+        if md_files:
+            logger.info(f"Markdownファイル {len(md_files)}件を処理中...")
+            md_parser = MarkdownParser()
+            for md_file in md_files:
+                try:
+                    documents = md_parser.parse(md_file)
+                    all_documents.extend(documents)
+                    processed_files += 1
+                    logger.info(f"  処理完了: {md_file.name}")
+                except Exception as e:
+                    logger.error(f"  Markdownファイル処理エラー {md_file.name}: {e}")
+    
+    if 'json' in formats_to_process or 'all' in formats_to_process:
+        json_files = get_files_by_extension(input_dir, '.json') + get_files_by_extension(input_dir, '.jsonl')
+        if json_files:
+            logger.info(f"JSONファイル {len(json_files)}件を処理中...")
+            json_parser = JsonParser()
+            for json_file in json_files:
+                try:
+                    documents = json_parser.parse(json_file)
+                    all_documents.extend(documents)
+                    processed_files += 1
+                    logger.info(f"  処理完了: {json_file.name}")
+                except Exception as e:
+                    logger.error(f"  JSONファイル処理エラー {json_file.name}: {e}")
+    
+    if 'text' in formats_to_process or 'all' in formats_to_process:
+        text_files = get_files_by_extension(input_dir, '.txt')
+        if text_files:
+            logger.info(f"テキストファイル {len(text_files)}件を処理中...")
+            text_parser = TextParser()
+            for text_file in text_files:
+                try:
+                    documents = text_parser.parse(text_file)
+                    all_documents.extend(documents)
+                    processed_files += 1
+                    logger.info(f"  処理完了: {text_file.name}")
+                except Exception as e:
+                    logger.error(f"  テキストファイル処理エラー {text_file.name}: {e}")
+    
+    logger.info(f"ファイル処理完了: {processed_files}件のファイルを処理しました")
     
     if not all_documents:
         logger.error("処理可能なドキュメントが見つかりませんでした")

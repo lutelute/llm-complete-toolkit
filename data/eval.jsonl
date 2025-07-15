@@ -1,0 +1,2 @@
+{"instruction": "Pythonでリストを作成する方法を教えてください。", "input": "", "output": "Pythonでリストを作成するには、角括弧[]を使用します。例: my_list = [1, 2, 3, 'hello']"}
+{"instruction": "for文の使い方を説明してください。", "input": "", "output": "for文は繰り返し処理を行うための構文です。例: for i in range(5): print(i)"}

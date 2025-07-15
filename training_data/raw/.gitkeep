@@ -1,0 +1,12 @@
+# 学習用データファイルをここに配置してください
+# Place all training data files here (PDF, Markdown, JSON, Text files)
+# 
+# 対応形式 / Supported formats:
+# - PDF files (.pdf)
+# - Markdown files (.md, .markdown)
+# - JSON files (.json, .jsonl)
+# - Text files (.txt)
+#
+# 使用例 / Usage:
+# cp /path/to/your/mixed/files/* training_data/raw/
+# python main.py extract-training-data

@@ -52,10 +52,8 @@ models/fine_tuned_models/*/
 models/trained_models/*/
 
 # Training data
-training_data/raw/pdf/*.pdf
-training_data/raw/markdown/*.md
-training_data/raw/json/*.json
-training_data/raw/text/*.txt
+training_data/raw/*
+!training_data/raw/.gitkeep
 training_data/processed/
 training_data/datasets/
 

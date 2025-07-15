@@ -151,14 +151,14 @@ python main.py create-samples
 ### 4. 学習用データの準備
 
 ```bash
-# 学習用データフォルダにファイルを配置
-cp /path/to/your/pdfs/*.pdf training_data/raw/pdf/
-cp /path/to/your/markdown/*.md training_data/raw/markdown/
-cp /path/to/your/json/*.json training_data/raw/json/
-cp /path/to/your/text/*.txt training_data/raw/text/
+# 学習用データフォルダにファイルを配置（全形式混在OK）
+cp /path/to/your/mixed/files/* training_data/raw/
 
 # 学習用データの抽出・変換
 python main.py extract-training-data --split-data --instruction-format
+
+# 配置されたファイルを確認
+ls -la training_data/raw/
 ```
 
 ### 5. ドキュメント処理（従来の方法）
@@ -196,24 +196,29 @@ python main.py train-rl --algorithm dqn
 
 #### 処理例
 ```bash
-# 学習用データの抽出（全形式）
+# 学習用データの抽出（全形式自動検出）
 python main.py extract-training-data
+
+# データ分割付き処理（推奨）
+python main.py extract-training-data --split-data --instruction-format
 
 # 特定形式のみ処理
 python main.py extract-training-data --format pdf
 python main.py extract-training-data --format json
 
-# データ分割付き処理
-python main.py extract-training-data --split-data --train-ratio 0.8 --val-ratio 0.1
+# カスタム入力フォルダを指定
+python main.py extract-training-data --input-dir /path/to/your/documents
 
 # 詳細オプション
 python main.py extract-training-data \
-  --input-dir training_data/raw \
+  --input-dir /path/to/your/documents \
   --output-dir training_data/processed \
   --output-format jsonl \
   --chunk-size 1024 \
   --instruction-format \
-  --split-data
+  --split-data \
+  --train-ratio 0.8 \
+  --val-ratio 0.1
 ```
 
 ### 転移学習

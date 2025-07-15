@@ -1,0 +1,5 @@
+{"instruction": "Pythonでリストを作成する方法を教えてください。", "input": "", "output": "Pythonでリストを作成するには、角括弧[]を使用します。例: my_list = [1, 2, 3, 'hello']"}
+{"instruction": "for文の使い方を説明してください。", "input": "", "output": "for文は繰り返し処理を行うための構文です。例: for i in range(5): print(i)"}
+{"instruction": "機械学習における転移学習とは何ですか？", "input": "", "output": "転移学習は、事前学習済みモデルを新しいタスクに適応させる手法です。計算資源を節約し、少ないデータでも良い性能を得られます。"}
+{"instruction": "強化学習のPPOアルゴリズムについて説明してください。", "input": "", "output": "PPO（Proximal Policy Optimization）は、ポリシー勾配法の改良版で、学習の安定性を向上させた強化学習アルゴリズムです。"}
+{"instruction": "LLMのファインチューニングにLoRAを使う利点は何ですか？", "input": "", "output": "LoRAは低ランク適応により、全パラメータを更新することなく効率的にファインチューニングできます。メモリ使用量を大幅に削減できます。"}

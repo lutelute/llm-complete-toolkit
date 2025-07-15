@@ -72,16 +72,61 @@ llm-complete-toolkit/
 
 ### 1. インストール
 
+#### 📦 自動インストール（推奨）
+
+**Linux/macOS:**
 ```bash
 # リポジトリのクローン
-git clone <repository-url>
+git clone https://github.com/lutelute/llm-complete-toolkit.git
 cd llm-complete-toolkit
 
+# 自動インストール実行
+chmod +x install.sh
+./install.sh
+```
+
+**Windows:**
+```cmd
+# リポジトリのクローン
+git clone https://github.com/lutelute/llm-complete-toolkit.git
+cd llm-complete-toolkit
+
+# 自動インストール実行
+install.bat
+```
+
+#### 🔧 手動インストール
+
+```bash
+# リポジトリのクローン
+git clone https://github.com/lutelute/llm-complete-toolkit.git
+cd llm-complete-toolkit
+
+# 仮想環境の作成（推奨）
+python -m venv venv
+source venv/bin/activate  # Linux/macOS
+# または
+venv\Scripts\activate     # Windows
+
 # 依存関係のインストール
+pip install --upgrade pip setuptools wheel
 pip install -r requirements.txt
 
-# Flash Attention (オプション、GPUでの高速化)
+# セットアップスクリプト実行
+python setup.py
+
+# GPU最適化（オプション）
 pip install flash-attn --no-build-isolation
+```
+
+#### 🐳 Docker利用
+
+```bash
+# Dockerイメージのビルド
+docker build -t llm-complete-toolkit .
+
+# コンテナの実行
+docker run -it --gpus all -v $(pwd):/workspace llm-complete-toolkit
 ```
 
 ### 2. モデルのダウンロード
@@ -325,30 +370,127 @@ python main.py train-rl --algorithm ppo --episodes 2000
 
 ## ❗ トラブルシューティング
 
-### よくある問題
+### 📋 システム要件チェック
 
-#### CUDA out of memory
+#### Python環境の確認
 ```bash
-# バッチサイズを小さくする
-python main.py train-qlora --train-data data/train.jsonl --batch-size 1
+# Python バージョン確認
+python --version  # 3.8以上必要
 
-# QLoRAを使用する
-python main.py train-qlora --train-data data/train.jsonl
+# 仮想環境の確認
+which python  # venv内のpythonを使用しているか確認
 ```
 
-#### モデル読み込みエラー
+#### GPU環境の確認
 ```bash
-# キャッシュをクリア
+# CUDA環境の確認
+nvidia-smi
+python -c "import torch; print('CUDA:', torch.cuda.is_available())"
+
+# Apple Silicon (MPS) の確認
+python -c "import torch; print('MPS:', torch.backends.mps.is_available())"
+```
+
+### 🔧 よくある問題と解決方法
+
+#### 1. CUDA out of memory
+```bash
+# バッチサイズを小さくする
+python main.py train-lora --train-data data/train.jsonl --batch-size 1
+
+# QLoRAを使用する（メモリ効率的）
+python main.py train-qlora --train-data data/train.jsonl --batch-size 1
+
+# 勾配累積を使用する
+python main.py train-lora --train-data data/train.jsonl --batch-size 1 --gradient-accumulation-steps 8
+```
+
+#### 2. モデル読み込みエラー
+```bash
+# HuggingFaceキャッシュをクリア
 rm -rf ~/.cache/huggingface/
 
 # 依存関係を更新
-pip install --upgrade transformers torch
+pip install --upgrade transformers torch accelerate
+
+# 特定のモデルを再ダウンロード
+python scripts/download_models.py --model microsoft/DialoGPT-medium
 ```
 
-#### メモリ不足
-- QLoRAを使用
-- gradient_accumulation_stepsを増やす
-- per_device_train_batch_sizeを減らす
+#### 3. インストールエラー
+```bash
+# pip を最新版にアップデート
+pip install --upgrade pip setuptools wheel
+
+# 依存関係を個別インストール
+pip install torch transformers datasets
+
+# requirements.txtを段階的にインストール
+pip install -r requirements.txt --no-deps
+pip install -r requirements.txt
+```
+
+#### 4. Flash Attention インストール失敗
+```bash
+# CUDA環境でのインストール
+pip install flash-attn --no-build-isolation
+
+# 環境が合わない場合は無効化
+# requirements.txtでコメントアウト
+```
+
+#### 5. パフォーマンスの問題
+```bash
+# CPU使用数を制限
+export OMP_NUM_THREADS=4
+
+# メモリ使用量を制限
+export PYTORCH_CUDA_ALLOC_CONF=max_split_size_mb:512
+
+# 混合精度を有効化
+python main.py train-lora --train-data data/train.jsonl --fp16
+```
+
+### 🏥 診断スクリプト
+
+```bash
+# 環境診断の実行
+python -c "
+import torch
+import transformers
+import sys
+
+print('Python:', sys.version)
+print('PyTorch:', torch.__version__)
+print('Transformers:', transformers.__version__)
+print('CUDA Available:', torch.cuda.is_available())
+if torch.cuda.is_available():
+    print('CUDA Version:', torch.version.cuda)
+    print('GPU Count:', torch.cuda.device_count())
+    print('GPU Name:', torch.cuda.get_device_name(0))
+"
+```
+
+### 📞 サポート
+
+問題が解決しない場合は、以下の情報と共にIssueを作成してください：
+
+1. **環境情報**: OS、Python版、GPU情報
+2. **エラーメッセージ**: 完全なエラーログ
+3. **実行コマンド**: 実際に実行したコマンド
+4. **設定ファイル**: 使用したconfig.yamlの内容
+
+```bash
+# 環境情報を取得
+python setup.py --debug > debug_info.txt
+```
+
+### 🔗 参考リンク
+
+- [PyTorch GPU サポート](https://pytorch.org/get-started/locally/)
+- [HuggingFace Transformers ドキュメント](https://huggingface.co/docs/transformers)
+- [PEFT (Parameter Efficient Fine-Tuning)](https://huggingface.co/docs/peft)
+- [Stable Baselines3 ドキュメント](https://stable-baselines3.readthedocs.io/)
 
 ## 🤝 貢献
 

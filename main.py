@@ -61,6 +61,40 @@ def run_command(command: list, cwd: Path = None):
         raise
 
 
+def run_command_with_progress(command: list, cwd: Path = None):
+    """コマンドを実行し、リアルタイムで進捗を表示"""
+    logger = logging.getLogger(__name__)
+    logger.info(f"実行中: {' '.join(command)}")
+    
+    try:
+        process = subprocess.Popen(
+            command,
+            cwd=cwd,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.STDOUT,
+            text=True,
+            bufsize=1,
+            universal_newlines=True
+        )
+        
+        # リアルタイムで出力を表示
+        for line in iter(process.stdout.readline, ''):
+            if line:
+                print(line.rstrip())
+                logger.info(line.rstrip())
+        
+        process.wait()
+        
+        if process.returncode != 0:
+            raise subprocess.CalledProcessError(process.returncode, command)
+            
+        return process
+        
+    except subprocess.CalledProcessError as e:
+        logger.error(f"コマンド実行エラー: {e}")
+        raise
+
+
 def extract_documents(args):
     """PDFやMarkdownからドキュメント抽出"""
     logger = logging.getLogger(__name__)
@@ -197,7 +231,7 @@ def launch_lora_training(args):
     if args.verbose:
         command.append("-v")
     
-    run_command(command)
+    run_command_with_progress(command)
 
 
 def launch_qlora_training(args):

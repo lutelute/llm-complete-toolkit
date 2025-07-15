@@ -143,6 +143,9 @@ class LoRAFineTuner:
             **kwargs: その他の引数
         """
         
+        # max_lengthなどの不要なパラメータを除去
+        filtered_kwargs = {k: v for k, v in kwargs.items() if k not in ['max_length']}
+        
         # トレーニング引数の設定
         training_args = TrainingArguments(
             output_dir=output_dir,
@@ -151,17 +154,17 @@ class LoRAFineTuner:
             gradient_accumulation_steps=gradient_accumulation_steps,
             warmup_steps=warmup_steps,
             learning_rate=learning_rate,
-            fp16=torch.cuda.is_available(),
+            fp16=torch.cuda.is_available() and not torch.backends.mps.is_available(),
             logging_steps=logging_steps,
             save_steps=save_steps,
-            evaluation_strategy="steps" if eval_dataset else "no",
+            eval_strategy="steps" if eval_dataset else "no",
             eval_steps=save_steps if eval_dataset else None,
             save_total_limit=3,
             load_best_model_at_end=True if eval_dataset else False,
             metric_for_best_model="eval_loss" if eval_dataset else None,
             greater_is_better=False,
             report_to="tensorboard",
-            **kwargs
+            **filtered_kwargs
         )
         
         # データコレーターの設定

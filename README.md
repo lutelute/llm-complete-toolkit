@@ -148,21 +148,34 @@ python scripts/download_models.py --model gpt2 --model microsoft/DialoGPT-small
 python main.py create-samples
 ```
 
-### 4. ドキュメント処理
+### 4. 学習用データの準備
+
+```bash
+# 学習用データフォルダにファイルを配置
+cp /path/to/your/pdfs/*.pdf training_data/raw/pdf/
+cp /path/to/your/markdown/*.md training_data/raw/markdown/
+cp /path/to/your/json/*.json training_data/raw/json/
+cp /path/to/your/text/*.txt training_data/raw/text/
+
+# 学習用データの抽出・変換
+python main.py extract-training-data --split-data --instruction-format
+```
+
+### 5. ドキュメント処理（従来の方法）
 
 ```bash
 # PDFやMarkdownファイルからデータを抽出
 python main.py extract data/ outputs/ --format jsonl --instruction-format
 ```
 
-### 5. モデルトレーニング
+### 6. モデルトレーニング
 
 ```bash
-# LoRAファインチューニング
-python main.py train-lora --train-data data/train.jsonl
+# 学習用データで訓練
+python main.py train-lora --train-data training_data/datasets/training/train.jsonl --eval-data training_data/datasets/validation/eval.jsonl
 
 # QLoRAファインチューニング（メモリ効率的）
-python main.py train-qlora --train-data data/train.jsonl
+python main.py train-qlora --train-data training_data/datasets/training/train.jsonl
 
 # PPO強化学習
 python main.py train-rl --algorithm ppo
@@ -173,23 +186,34 @@ python main.py train-rl --algorithm dqn
 
 ## 📚 詳細な使用方法
 
-### ドキュメント処理
+### 学習用データ管理
 
 #### サポートファイル形式
 - **PDF**: .pdf
 - **Markdown**: .md, .markdown
+- **JSON**: .json, .jsonl
 - **テキスト**: .txt
 
 #### 処理例
 ```bash
-# 基本的な抽出
-python main.py extract documents/ outputs/
+# 学習用データの抽出（全形式）
+python main.py extract-training-data
+
+# 特定形式のみ処理
+python main.py extract-training-data --format pdf
+python main.py extract-training-data --format json
+
+# データ分割付き処理
+python main.py extract-training-data --split-data --train-ratio 0.8 --val-ratio 0.1
 
 # 詳細オプション
-python main.py extract documents/ outputs/ \
-  --format jsonl \
+python main.py extract-training-data \
+  --input-dir training_data/raw \
+  --output-dir training_data/processed \
+  --output-format jsonl \
   --chunk-size 1024 \
-  --instruction-format
+  --instruction-format \
+  --split-data
 ```
 
 ### 転移学習

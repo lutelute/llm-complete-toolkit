@@ -18,6 +18,8 @@ sys.path.insert(0, str(Path(__file__).parent))
 
 from document_processing.parsers.pdf_parser import PDFParser
 from document_processing.parsers.markdown_parser import MarkdownParser
+from document_processing.parsers.json_parser import JsonParser
+from document_processing.parsers.text_parser import TextParser
 from document_processing.converters.lm_studio_converter import LMStudioConverter
 from shared_utils.file_utils import get_files_by_extension, validate_input_directory, create_output_directory
 from shared_utils.training_utils import setup_logging
@@ -104,6 +106,34 @@ def extract_documents(args):
                 all_documents.extend(documents)
             except Exception as e:
                 logger.error(f"Markdownファイル処理エラー {md_file}: {e}")
+    
+    # JSONファイルの処理
+    json_files = get_files_by_extension(input_dir, '.json') + get_files_by_extension(input_dir, '.jsonl')
+    if json_files:
+        logger.info(f"JSONファイル {len(json_files)}件を処理中...")
+        json_parser = JsonParser()
+        
+        for json_file in json_files:
+            logger.info(f"処理中: {json_file}")
+            try:
+                documents = json_parser.parse(json_file)
+                all_documents.extend(documents)
+            except Exception as e:
+                logger.error(f"JSONファイル処理エラー {json_file}: {e}")
+    
+    # テキストファイルの処理
+    text_files = get_files_by_extension(input_dir, '.txt')
+    if text_files:
+        logger.info(f"テキストファイル {len(text_files)}件を処理中...")
+        text_parser = TextParser()
+        
+        for text_file in text_files:
+            logger.info(f"処理中: {text_file}")
+            try:
+                documents = text_parser.parse(text_file)
+                all_documents.extend(documents)
+            except Exception as e:
+                logger.error(f"テキストファイル処理エラー {text_file}: {e}")
     
     if not all_documents:
         logger.error("処理可能なドキュメントが見つかりませんでした")
@@ -320,6 +350,159 @@ python main.py train-rl --algorithm ppo
     logger.info(f"  評価データ: {eval_file}")
 
 
+def extract_training_data(args):
+    """学習用データの抽出処理"""
+    logger = logging.getLogger(__name__)
+    logger.info("学習用データ抽出を開始します")
+    
+    input_dir = Path(args.input_dir)
+    output_dir = Path(args.output_dir)
+    
+    # 入力ディレクトリの検証
+    if not input_dir.exists():
+        logger.error(f"入力ディレクトリが存在しません: {input_dir}")
+        sys.exit(1)
+    
+    # 出力ディレクトリの作成
+    output_dir.mkdir(parents=True, exist_ok=True)
+    
+    all_documents = []
+    
+    # 処理するファイル形式の決定
+    formats_to_process = []
+    if args.format == 'all':
+        formats_to_process = ['pdf', 'markdown', 'json', 'text']
+    else:
+        formats_to_process = [args.format]
+    
+    # 各形式のファイルを処理
+    for format_type in formats_to_process:
+        format_dir = input_dir / format_type
+        if not format_dir.exists():
+            logger.warning(f"フォーマットディレクトリが存在しません: {format_dir}")
+            continue
+            
+        if format_type == 'pdf':
+            pdf_files = get_files_by_extension(format_dir, '.pdf')
+            if pdf_files:
+                logger.info(f"PDFファイル {len(pdf_files)}件を処理中...")
+                pdf_parser = PDFParser()
+                for pdf_file in pdf_files:
+                    try:
+                        documents = pdf_parser.parse(pdf_file)
+                        all_documents.extend(documents)
+                        logger.info(f"  処理完了: {pdf_file}")
+                    except Exception as e:
+                        logger.error(f"  PDFファイル処理エラー {pdf_file}: {e}")
+        
+        elif format_type == 'markdown':
+            md_files = get_files_by_extension(format_dir, '.md')
+            if md_files:
+                logger.info(f"Markdownファイル {len(md_files)}件を処理中...")
+                md_parser = MarkdownParser()
+                for md_file in md_files:
+                    try:
+                        documents = md_parser.parse(md_file)
+                        all_documents.extend(documents)
+                        logger.info(f"  処理完了: {md_file}")
+                    except Exception as e:
+                        logger.error(f"  Markdownファイル処理エラー {md_file}: {e}")
+        
+        elif format_type == 'json':
+            json_files = get_files_by_extension(format_dir, '.json') + get_files_by_extension(format_dir, '.jsonl')
+            if json_files:
+                logger.info(f"JSONファイル {len(json_files)}件を処理中...")
+                json_parser = JsonParser()
+                for json_file in json_files:
+                    try:
+                        documents = json_parser.parse(json_file)
+                        all_documents.extend(documents)
+                        logger.info(f"  処理完了: {json_file}")
+                    except Exception as e:
+                        logger.error(f"  JSONファイル処理エラー {json_file}: {e}")
+        
+        elif format_type == 'text':
+            text_files = get_files_by_extension(format_dir, '.txt')
+            if text_files:
+                logger.info(f"テキストファイル {len(text_files)}件を処理中...")
+                text_parser = TextParser()
+                for text_file in text_files:
+                    try:
+                        documents = text_parser.parse(text_file)
+                        all_documents.extend(documents)
+                        logger.info(f"  処理完了: {text_file}")
+                    except Exception as e:
+                        logger.error(f"  テキストファイル処理エラー {text_file}: {e}")
+    
+    if not all_documents:
+        logger.error("処理可能なドキュメントが見つかりませんでした")
+        sys.exit(1)
+    
+    # データ変換
+    logger.info("データ変換中...")
+    converter = LMStudioConverter(
+        chunk_size=args.chunk_size,
+        output_format=args.output_format
+    )
+    
+    converted_data = converter.convert(all_documents)
+    
+    # データ分割
+    if args.split_data:
+        logger.info("データを訓練/検証/テストに分割中...")
+        
+        # データセット保存ディレクトリの作成
+        datasets_dir = Path("training_data/datasets")
+        (datasets_dir / "training").mkdir(parents=True, exist_ok=True)
+        (datasets_dir / "validation").mkdir(parents=True, exist_ok=True)
+        (datasets_dir / "test").mkdir(parents=True, exist_ok=True)
+        
+        # データをシャッフル
+        import random
+        random.shuffle(converted_data)
+        
+        # 分割点の計算
+        total_size = len(converted_data)
+        train_size = int(total_size * args.train_ratio)
+        val_size = int(total_size * args.val_ratio)
+        
+        # データ分割
+        train_data = converted_data[:train_size]
+        val_data = converted_data[train_size:train_size + val_size]
+        test_data = converted_data[train_size + val_size:]
+        
+        # 各データセットを保存
+        train_file = datasets_dir / "training" / f"train.{args.output_format}"
+        val_file = datasets_dir / "validation" / f"eval.{args.output_format}"
+        test_file = datasets_dir / "test" / f"test.{args.output_format}"
+        
+        converter.save(train_data, train_file)
+        converter.save(val_data, val_file)
+        converter.save(test_data, test_file)
+        
+        logger.info(f"データ分割完了:")
+        logger.info(f"  訓練データ: {len(train_data)}件 -> {train_file}")
+        logger.info(f"  検証データ: {len(val_data)}件 -> {val_file}")
+        logger.info(f"  テストデータ: {len(test_data)}件 -> {test_file}")
+    
+    # 通常の出力
+    output_file = output_dir / f"training_data.{args.output_format}"
+    converter.save(converted_data, output_file)
+    
+    # インストラクション形式の出力
+    if args.instruction_format:
+        logger.info("インストラクション形式でも出力中...")
+        instruction_data = converter.convert_for_instruction_tuning(all_documents)
+        instruction_file = output_dir / f"instruction_data.{args.output_format}"
+        converter.save_instruction_format(instruction_data, instruction_file)
+        logger.info(f"インストラクション形式出力: {instruction_file}")
+    
+    logger.info(f"学習用データ抽出完了:")
+    logger.info(f"  処理ドキュメント数: {len(all_documents)}")
+    logger.info(f"  生成チャンク数: {len(converted_data)}")
+    logger.info(f"  出力ファイル: {output_file}")
+
+
 def main():
     setup_project_logging()
     logger = logging.getLogger(__name__)
@@ -398,6 +581,19 @@ def main():
     samples_parser = subparsers.add_parser('create-samples', help='サンプルデータ作成')
     samples_parser.add_argument('--output-dir', type=str, default='data', help='出力ディレクトリ')
     
+    # 学習用データ抽出サブコマンド
+    training_parser = subparsers.add_parser('extract-training-data', help='学習用データ抽出')
+    training_parser.add_argument('--input-dir', type=str, default='training_data/raw', help='入力ディレクトリ')
+    training_parser.add_argument('--output-dir', type=str, default='training_data/processed', help='出力ディレクトリ')
+    training_parser.add_argument('--format', choices=['pdf', 'markdown', 'json', 'text', 'all'], default='all', help='処理するファイル形式')
+    training_parser.add_argument('--output-format', choices=['jsonl', 'csv', 'text'], default='jsonl', help='出力フォーマット')
+    training_parser.add_argument('--chunk-size', type=int, default=512, help='チャンクサイズ')
+    training_parser.add_argument('--instruction-format', action='store_true', help='インストラクション形式でも出力')
+    training_parser.add_argument('--split-data', action='store_true', help='訓練/検証/テストデータに分割')
+    training_parser.add_argument('--train-ratio', type=float, default=0.8, help='訓練データの割合')
+    training_parser.add_argument('--val-ratio', type=float, default=0.1, help='検証データの割合')
+    training_parser.add_argument('--test-ratio', type=float, default=0.1, help='テストデータの割合')
+    
     args = parser.parse_args()
     
     if not args.command:
@@ -415,6 +611,8 @@ def main():
             launch_rl_training(args)
         elif args.command == 'create-samples':
             create_sample_data(args.output_dir)
+        elif args.command == 'extract-training-data':
+            extract_training_data(args)
         
         logger.info("処理が完了しました！")
         

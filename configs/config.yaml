@@ -2,7 +2,7 @@
 
 # 共通設定
 common:
-  device: "cuda"  # cuda, cpu, mps
+  device: "mps"  # cuda, cpu, mps
   seed: 42
   log_level: "INFO"
   output_dir: "./outputs"

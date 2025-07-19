@@ -1,0 +1,21 @@
+# 基本的なPythonファイル除外のみ
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+.DS_Store
+
+# すべてのモデルファイルを除外
+models/
+gguf_models/
+lm_studio_models/
+mlx_models/
+outputs/
+cache/
+logs/
+llama.cpp/
+*.bin
+*.safetensors
+*.pt
+*.pth
+*.gguf
